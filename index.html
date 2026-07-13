@@ -261,6 +261,18 @@
         .region-quest-chip { border:1px solid rgba(0,240,255,.24); background:rgba(0,240,255,.04); }
         .map-legend { position:absolute; left:14px; top:14px; z-index:9; background:rgba(3,3,12,.82); border:1px solid rgba(31,31,69,.8); backdrop-filter:blur(8px); }
         .map-titleplate { position:absolute; left:50%; top:16px; transform:translateX(-50%); z-index:8; text-align:center; pointer-events:none; }
+
+        .proof-archive { border:1px solid rgba(0,240,255,.28); background:linear-gradient(145deg,rgba(0,240,255,.045),rgba(189,0,255,.035)); }
+        .proof-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; }
+        .polaroid { position:relative; background:#07111d; padding:7px 7px 24px; border:1px solid rgba(0,240,255,.38); box-shadow:0 12px 30px rgba(0,0,0,.35),0 0 18px rgba(0,240,255,.08); transform:rotate(-.6deg); animation:polaroidDrop .38s ease-out; }
+        .polaroid:nth-child(even){transform:rotate(.7deg)}
+        .polaroid img { width:100%; height:125px; object-fit:cover; display:block; cursor:zoom-in; }
+        .polaroid-caption { position:absolute; left:7px; right:7px; bottom:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; color:#94a3b8; }
+        @keyframes polaroidDrop { from{opacity:0;transform:translateY(-14px) scale(.92) rotate(-3deg)} to{opacity:1;transform:translateY(0) scale(1) rotate(-.6deg)} }
+        .memory-archive-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:10px; }
+        .image-modal-backdrop { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; padding:24px; background:rgba(0,4,12,.92); backdrop-filter:blur(8px); }
+        .image-modal-card { max-width:min(1000px,94vw); max-height:90vh; border:1px solid rgba(0,240,255,.45); background:#050816; box-shadow:0 0 60px rgba(0,240,255,.18); }
+        .image-modal-card img { display:block; max-width:100%; max-height:78vh; object-fit:contain; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 flex items-center justify-center">
@@ -552,7 +564,7 @@
         }
 
         function App() {
-            const SAVE_KEY = 'architectLabSaveV4';
+            const SAVE_KEY = 'architectLabSaveV5';
             const cloneInitialQuests = () => INITIAL_QUESTS.map(quest => ({ ...quest }));
             const readSavedGame = () => {
                 try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
@@ -584,6 +596,7 @@
             const [activeEvidenceQuestId, setActiveEvidenceQuestId] = useState(null);
             const [memoryEvidence, setMemoryEvidence] = useState({});
             const [activeMemoryRegionId, setActiveMemoryRegionId] = useState(null);
+            const [imageModal, setImageModal] = useState(null);
             
             const [logs, setLogs] = useState([
                 "[10:31:31] ARCHITECT_LAB 온라인 상태 감지.",
@@ -619,9 +632,9 @@
                     quests, level, exp, expToNext, achievements, unlockedItems,
                     visitedTabs, footprints, companionUnlocked, showOpening,
                     tutorialStage, activeTab, systemStatusView, equippedWeapon,
-                    equippedArmor, knittingUnlocked
+                    equippedArmor, knittingUnlocked, questEvidence, memoryEvidence
                 }));
-            }, [gameMode, quests, level, exp, expToNext, achievements, unlockedItems, visitedTabs, footprints, companionUnlocked, showOpening, tutorialStage, activeTab, systemStatusView, equippedWeapon, equippedArmor, knittingUnlocked]);
+            }, [gameMode, quests, level, exp, expToNext, achievements, unlockedItems, visitedTabs, footprints, companionUnlocked, showOpening, tutorialStage, activeTab, systemStatusView, equippedWeapon, equippedArmor, knittingUnlocked, questEvidence, memoryEvidence]);
 
             const applyGameState = (saved) => {
                 if (!saved) return;
@@ -641,6 +654,8 @@
                 setEquippedWeapon(saved.equippedWeapon || 'neural_deck');
                 setEquippedArmor(saved.equippedArmor || 'insulated_suit');
                 setKnittingUnlocked(Boolean(saved.knittingUnlocked));
+                setQuestEvidence(saved.questEvidence || {});
+                setMemoryEvidence(saved.memoryEvidence || {});
             };
 
             const resetRuntime = ({ clearSave = false } = {}) => {
@@ -663,6 +678,9 @@
                 setCompanionUnlocked(false);
                 setGongsilDialogue(false);
                 setSelectedRegion('home');
+                setQuestEvidence({});
+                setMemoryEvidence({});
+                setImageModal(null);
                 setQuestFlyout(null);
                 setQuestEvidence({});
                 setActiveEvidenceQuestId(null);
@@ -900,7 +918,7 @@
 
             const handleEvidenceUpload = (questId, file, source='FILE') => {
                 readImageFile(file, (image) => {
-                    setQuestEvidence(prev => ({...prev,[questId]:image}));
+                    setQuestEvidence(prev => ({...prev,[questId]:[...(prev[questId] || []),image]}));
                     setActiveEvidenceQuestId(questId);
                     addLogMessage(`[EVIDENCE:${source}] '${image.name}' 이미지 미리보기 등록.`,setLogs);
                     showGameToast('EVIDENCE READY','미리보기를 확인한 뒤 완료를 확정하세요.');
@@ -941,7 +959,7 @@
 
             const handleMemoryImage = (regionId, file, source='FILE') => {
                 readImageFile(file, (image) => {
-                    setMemoryEvidence(prev => ({...prev,[regionId]:image}));
+                    setMemoryEvidence(prev => ({...prev,[regionId]:[...(prev[regionId] || []),image]}));
                     setActiveMemoryRegionId(regionId);
                     addLogMessage(`[MEMORY:${source}] ${MAP_REGIONS.find(r=>r.id===regionId)?.name || regionId} 추억 이미지 등록.`,setLogs);
                     showGameToast('MEMORY SHARD SAVED','월드맵의 추억 지역에 이미지가 연결되었습니다.');
@@ -957,17 +975,41 @@
             };
 
             const confirmQuestWithEvidence = (questId) => {
-                const evidence=questEvidence[questId];
-                if (!evidence) {
+                const evidenceList=questEvidence[questId] || [];
+                if (!evidenceList.length) {
                     showGameToast('EVIDENCE REQUIRED','관련 사진을 먼저 업로드하세요.');
                     return;
                 }
+                const linkedRegions = MAP_REGIONS.filter(region => (region.questIds || []).includes(questId));
+                if (linkedRegions.length) {
+                    setMemoryEvidence(prev => {
+                        const next={...prev};
+                        linkedRegions.forEach(region => {
+                            const existing=next[region.id] || [];
+                            const seen=new Set(existing.map(item=>item.preview));
+                            next[region.id]=[...existing,...evidenceList.filter(item=>!seen.has(item.preview))];
+                        });
+                        return next;
+                    });
+                }
                 const completed=completeQuest(questId);
-                if (completed) addLogMessage(`[EVIDENCE VERIFIED] 사진 확인 후 퀘스트 완료 승인.`,setLogs);
+                if (completed) {
+                    addLogMessage(`[EVIDENCE VERIFIED] 사진 확인 후 퀘스트 완료 승인.`,setLogs);
+                    showGameToast('PROOF ARCHIVED', linkedRegions.length ? '사진이 퀘스트와 월드맵에 기록되었습니다.' : '사진이 퀘스트 기록에 보관되었습니다.');
+                }
             };
 
-            const removeQuestEvidence = (questId) => {
-                setQuestEvidence(prev => { const next={...prev}; delete next[questId]; return next; });
+            const removeQuestEvidence = (questId, index=null) => {
+                setQuestEvidence(prev => {
+                    const next={...prev};
+                    if (index===null) delete next[questId];
+                    else {
+                        const list=[...(next[questId] || [])];
+                        list.splice(index,1);
+                        if (list.length) next[questId]=list; else delete next[questId];
+                    }
+                    return next;
+                });
             };
 
             const handleQuestClick = (questId) => {
@@ -1611,9 +1653,9 @@
                                                         </div>
                                                     </div>
 
-                                                    {!isCompleted && quest.status==='active' && !quest.autoTab && quest.id!=='hidden_gongsil' && quest.id!=='tutorial_leave' && (
+                                                    {quest.status!=='locked' && !quest.autoTab && quest.id!=='hidden_gongsil' && quest.id!=='tutorial_leave' && (
                                                         <div
-                                                            className={`evidence-zone mt-3 rounded p-3 ${activeEvidenceQuestId===quest.id?'is-active':''}`}
+                                                            className={`evidence-zone proof-archive mt-3 rounded p-3 ${activeEvidenceQuestId===quest.id?'is-active':''}`}
                                                             onClick={(e)=>{e.stopPropagation();setActiveEvidenceQuestId(quest.id);setActiveMemoryRegionId(null);}}
                                                             onPaste={(e)=>{const file=getClipboardImage(e.clipboardData);if(file){e.preventDefault();e.stopPropagation();handleEvidenceUpload(quest.id,file,'PASTE');}}}
                                                             onDragOver={(e)=>{e.preventDefault();e.currentTarget.classList.add('is-active')}}
@@ -1621,27 +1663,32 @@
                                                             onDrop={(e)=>{e.currentTarget.classList.remove('is-active');handleEvidenceDrop(e,quest.id)}}
                                                             tabIndex="0"
                                                         >
-                                                            {questEvidence[quest.id] ? (
-                                                                <div className="space-y-2">
-                                                                    <img src={questEvidence[quest.id].preview} className="evidence-thumb rounded" alt={`${quest.title} 증빙 미리보기`}/>
-                                                                    <div className="truncate text-[9px] text-cyber-dim">{questEvidence[quest.id].name}</div>
-                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                        <button onClick={()=>confirmQuestWithEvidence(quest.id)} className="rounded border border-green-400/50 bg-green-400/10 px-2 py-2 text-[10px] font-bold text-green-300 hover:bg-green-400 hover:text-black">퀘스트 완료 확정</button>
-                                                                        <button onClick={()=>removeQuestEvidence(quest.id)} className="rounded border border-red-400/40 px-2 py-2 text-[10px] text-red-300 hover:bg-red-400/10">사진 다시 선택</button>
+                                                            <div className="mb-2 flex items-center justify-between gap-2">
+                                                                <span className="text-[9px] tracking-[.18em] text-cyber-neon">{isCompleted?'PROOF ARCHIVE':'QUEST PROOF'}</span>
+                                                                <span className="text-[8px] text-cyber-dim">{(questEvidence[quest.id]||[]).length} IMAGE(S)</span>
+                                                            </div>
+                                                            {(questEvidence[quest.id]||[]).length ? (
+                                                                <div className="space-y-3">
+                                                                    <div className="proof-grid">
+                                                                        {(questEvidence[quest.id]||[]).map((image,index)=><div className="polaroid" key={`${image.preview}-${index}`}>
+                                                                            <img src={image.preview} alt={`${quest.title} 증빙 ${index+1}`} onClick={(e)=>{e.stopPropagation();setImageModal({src:image.preview,title:`${quest.title} // PROOF ${index+1}`})}}/>
+                                                                            <div className="polaroid-caption">{image.name}</div>
+                                                                            {!isCompleted&&<button onClick={(e)=>{e.stopPropagation();removeQuestEvidence(quest.id,index)}} className="absolute right-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[8px] text-red-300">×</button>}
+                                                                        </div>)}
                                                                     </div>
+                                                                    {!isCompleted && <div className="grid grid-cols-2 gap-2">
+                                                                        <button onClick={(e)=>{e.stopPropagation();confirmQuestWithEvidence(quest.id)}} className="rounded border border-green-400/50 bg-green-400/10 px-2 py-2 text-[10px] font-bold text-green-300 hover:bg-green-400 hover:text-black">퀘스트 완료 확정</button>
+                                                                        <label className="evidence-upload-btn flex cursor-pointer items-center justify-center rounded border border-cyber-border px-2 py-2 text-[10px] text-cyber-dim">사진 추가<input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>Array.from(e.target.files||[]).forEach(file=>handleEvidenceUpload(quest.id,file,'FILE'))}/></label>
+                                                                    </div>}
                                                                 </div>
                                                             ) : (
                                                                 <div className="space-y-2">
                                                                     <div className="evidence-drop-copy rounded p-3 text-center text-[10px] text-cyber-dim">
                                                                         <div className="text-lg">📋 · 🖱 · 📁</div>
                                                                         <div className="mt-1 font-bold text-cyber-neon">Ctrl+V 붙여넣기 / 드래그 앤 드롭</div>
-                                                                        <div className="mt-1 text-[9px]">이 영역을 한 번 클릭한 뒤 캡처 이미지를 붙여넣을 수 있습니다.</div>
+                                                                        <div className="mt-1 text-[9px]">이 영역을 클릭한 뒤 캡처 이미지를 붙여넣을 수 있습니다.</div>
                                                                     </div>
-                                                                    <label className="evidence-upload-btn flex items-center justify-center gap-2 rounded border border-cyber-border px-3 py-2.5 text-[10px] text-cyber-dim">
-                                                                        <i data-lucide="image-up" className="h-4 w-4"></i>
-                                                                        저장된 사진 선택
-                                                                        <input type="file" accept="image/*" className="hidden" onChange={(e)=>handleEvidenceUpload(quest.id,e.target.files?.[0],'FILE')}/>
-                                                                    </label>
+                                                                    <label className="evidence-upload-btn flex cursor-pointer items-center justify-center gap-2 rounded border border-cyber-border px-3 py-2.5 text-[10px] text-cyber-dim">📁 저장된 사진 선택<input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>Array.from(e.target.files||[]).forEach(file=>handleEvidenceUpload(quest.id,file,'FILE'))}/></label>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1864,19 +1911,20 @@
                                                     tabIndex="0"
                                                 >
                                                     <div className="mb-2 text-[9px] tracking-[.18em] text-purple-300">MEMORY SHARD GALLERY</div>
-                                                    {memoryEvidence[currentRegion.id] ? (
-                                                        <div className="space-y-2">
-                                                            <img src={memoryEvidence[currentRegion.id].preview} className="memory-thumb rounded" alt={`${currentRegion.name} 추억 이미지`}/>
-                                                            <div className="truncate text-[9px] text-cyber-dim">{memoryEvidence[currentRegion.id].name}</div>
-                                                            <button onClick={()=>setMemoryEvidence(prev=>{const next={...prev};delete next[currentRegion.id];return next})} className="w-full rounded border border-purple-300/35 px-2 py-2 text-[9px] text-purple-200 hover:bg-purple-400/10">추억 사진 다시 선택</button>
+                                                    {(memoryEvidence[currentRegion.id]||[]).length ? (
+                                                        <div className="space-y-3">
+                                                            <div className="memory-archive-grid">
+                                                                {(memoryEvidence[currentRegion.id]||[]).map((image,index)=><div className="polaroid" key={`${image.preview}-${index}`}>
+                                                                    <img src={image.preview} alt={`${currentRegion.name} memory ${index+1}`} onClick={(e)=>{e.stopPropagation();setImageModal({src:image.preview,title:`${currentRegion.name} // MEMORY ${index+1}`})}}/>
+                                                                    <div className="polaroid-caption">{image.name}</div>
+                                                                </div>)}
+                                                            </div>
+                                                            <label className="evidence-upload-btn flex cursor-pointer items-center justify-center gap-2 rounded border border-purple-300/30 px-3 py-2 text-[9px] text-purple-200">＋ 추억 사진 추가<input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>Array.from(e.target.files||[]).forEach(file=>handleMemoryImage(currentRegion.id,file,'FILE'))}/></label>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-2 text-center">
                                                             <div className="rounded border border-dashed border-purple-300/35 p-3 text-[9px] text-cyber-dim">Ctrl+V 또는 드래그 앤 드롭으로 추억 사진을 남기세요.</div>
-                                                            <label className="evidence-upload-btn flex items-center justify-center gap-2 rounded border border-purple-300/30 px-3 py-2 text-[9px] text-purple-200">
-                                                                📁 저장된 추억 사진 선택
-                                                                <input type="file" accept="image/*" className="hidden" onChange={(e)=>handleMemoryImage(currentRegion.id,e.target.files?.[0],'FILE')}/>
-                                                            </label>
+                                                            <label className="evidence-upload-btn flex cursor-pointer items-center justify-center gap-2 rounded border border-purple-300/30 px-3 py-2 text-[9px] text-purple-200">📁 저장된 추억 사진 선택<input type="file" accept="image/*" multiple className="hidden" onChange={(e)=>Array.from(e.target.files||[]).forEach(file=>handleMemoryImage(currentRegion.id,file,'FILE'))}/></label>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1887,6 +1935,8 @@
                                 </section>
                                 );
                             })()}
+
+                            {activeTab === 'world' && (()=>{const allImages=Object.entries(memoryEvidence).flatMap(([regionId,images])=>(images||[]).map(image=>({regionId,image})));return allImages.length>0&&<section className="mt-5 rounded-lg border border-cyber-border bg-cyber-dark/70 p-4 animate-fadeIn"><div className="mb-3 flex items-center justify-between"><div><h3 className="text-sm font-bold text-cyber-neon">GLOBAL MEMORY ARCHIVE</h3><p className="text-[9px] text-cyber-dim">퀘스트 증빙과 추억 지역에 저장된 모든 이미지</p></div><span className="text-[9px] text-cyber-dim">{allImages.length} SHARDS</span></div><div className="memory-archive-grid">{allImages.map(({regionId,image},index)=>{const region=MAP_REGIONS.find(r=>r.id===regionId);return <div className="polaroid" key={`${regionId}-${image.preview}-${index}`}><img src={image.preview} alt="memory archive" onClick={()=>setImageModal({src:image.preview,title:`${region?.name||regionId} // MEMORY`})}/><div className="polaroid-caption">{region?.name||regionId} · {image.name}</div></div>})}</div></section>})()}
 
                             {/* TAB: ACHIEVEMENT */}
                             {activeTab === 'achievements' && (
@@ -1912,6 +1962,8 @@
                         </main>
                     </div>
 
+                    {imageModal && <div className="image-modal-backdrop" onClick={()=>setImageModal(null)}><div className="image-modal-card rounded-lg overflow-hidden" onClick={(e)=>e.stopPropagation()}><div className="flex items-center justify-between border-b border-cyber-border px-4 py-3"><span className="text-xs font-bold text-cyber-neon">{imageModal.title}</span><button onClick={()=>setImageModal(null)} className="rounded border border-cyber-border px-2 py-1 text-xs text-cyber-dim hover:text-white">CLOSE</button></div><img src={imageModal.src} alt={imageModal.title}/></div></div>}
+
                     {/* Footer bar */}
                     <footer className="mt-4 border-t border-cyber-border pt-4 text-center text-xs text-cyber-dim flex flex-col md:flex-row justify-between items-center gap-2">
                         <span>© 2026 ARCHITECT_LAB. ALL SYSTEM SECURED.</span>
@@ -1919,7 +1971,7 @@
                     </footer>
 
                 </div>
-            );git 
+            );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
